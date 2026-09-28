@@ -39,7 +39,7 @@
     <!-- Input Section -->
     <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-5">IPO Details</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         <!-- Investment Amount -->
         <div>
           <label for="investmentAmount" class="block text-sm font-medium text-gray-700 mb-1">Investment Amount (₹)</label>
@@ -70,6 +70,14 @@
           <p class="text-xs text-gray-400 mt-1">Tax deducted from gross profit (default 20%).</p>
           <p id="taxError" class="text-xs text-red-500 mt-1 hidden">Must be between 0% and 100%.</p>
         </div>
+        <!-- Investor Share % -->
+        <div>
+          <label for="investorSharePct" class="block text-sm font-medium text-gray-700 mb-1">Investor Share (%)</label>
+          <input type="number" id="investorSharePct" value="50" min="0" max="100" step="0.01"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+          <p class="text-xs text-gray-400 mt-1">A's share of profit. B gets the rest (<span id="applicantShareLabel">50</span>%).</p>
+          <p id="shareError" class="text-xs text-red-500 mt-1 hidden">Must be between 0% and 100%.</p>
+        </div>
       </div>
       <!-- Direct Split Toggle -->
       <div class="mt-5 p-3 bg-purple-50 rounded-lg border border-purple-200">
@@ -77,7 +85,7 @@
           <input type="checkbox" id="directSplit" class="mt-0.5 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
           <div>
             <span class="text-sm font-medium text-purple-900">Direct Profit Split (No Tax Adjustment)</span>
-            <p class="text-xs text-purple-600 mt-0.5">Split gross profit 50/50 directly. A gets investment + 50% gross profit. B gets 50% gross profit and pays tax from own share.</p>
+            <p class="text-xs text-purple-600 mt-0.5">Split gross profit directly using Investor Share %. A gets investment + A's share of gross profit. B gets remaining share and pays tax from own share.</p>
           </div>
         </label>
       </div>
@@ -108,11 +116,11 @@
             <p class="text-base font-semibold text-gray-900" id="outNet">--</p>
           </div>
           <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-500 mb-1">Profit Share — A</p>
+            <p class="text-xs text-gray-500 mb-1">Share — A (<span id="tilePctA">50</span>%)</p>
             <p class="text-base font-semibold text-brand-700" id="outShareA">--</p>
           </div>
           <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-500 mb-1">Profit Share — B</p>
+            <p class="text-xs text-gray-500 mb-1">Share — B (<span id="tilePctB">50</span>%)</p>
             <p class="text-base font-semibold text-emerald-700" id="outShareB">--</p>
           </div>
           <div class="bg-gray-50 rounded-lg p-3">
@@ -279,10 +287,16 @@
       const ipo = getVal('ipoAmount');
       const profitPct = getVal('profitPct');
       const taxPct = getVal('taxPct');
+      const aPct = getVal('investorSharePct');
+      const bPct = +(100 - aPct).toFixed(2);
+
+      // Update applicant label
+      setText('applicantShareLabel', bPct);
 
       // Validation
       const ipoErr = document.getElementById('ipoError');
       const taxErr = document.getElementById('taxError');
+      const shareErr = document.getElementById('shareError');
       let hasError = false;
 
       if (ipo > investment) {
@@ -297,6 +311,13 @@
         hasError = true;
       } else {
         taxErr.classList.add('hidden');
+      }
+
+      if (aPct < 0 || aPct > 100) {
+        shareErr.classList.remove('hidden');
+        hasError = true;
+      } else {
+        shareErr.classList.add('hidden');
       }
 
       if (investment < 0 || ipo < 0 || profitPct < 0) hasError = true;
@@ -322,26 +343,23 @@
       let net, shareA, shareB, transferToA, bRetains;
 
       if (directSplit) {
-        // Direct split: 50/50 on GROSS profit, no tax adjustment
-        // B pays tax from own share
-        const halfGross = +(Math.floor(gross * 100 / 2) / 100).toFixed(2);
-        const otherHalf = +(gross - halfGross).toFixed(2);
-        shareA = halfGross;                                  // A gets 50% gross
-        shareB = otherHalf;                                  // B gets 50% gross
-        net = gross;                                         // no tax deduction in split
-        transferToA = +(investment + shareA).toFixed(2);     // return principal + A's share
-        bRetains = +(shareB).toFixed(2);                     // B keeps own share (pays tax from it)
+        // Direct split on GROSS profit using custom %. B pays tax from own share.
+        shareA = +(Math.floor(gross * aPct) / 100).toFixed(2);
+        shareB = +(gross - shareA).toFixed(2);
+        net = gross;
+        transferToA = +(investment + shareA).toFixed(2);
+        bRetains = +(shareB).toFixed(2);
       } else {
-        // Standard: deduct tax first, then split net profit
+        // Standard: deduct tax first, then split net profit using custom %
         net = +(gross - tax).toFixed(2);
-        shareA = +(Math.floor(net * 100 / 2) / 100).toFixed(2);
+        shareA = +(Math.floor(net * aPct) / 100).toFixed(2);
         shareB = +(net - shareA).toFixed(2);
         transferToA = +(investment + shareA).toFixed(2);
         bRetains = +(shareB + tax).toFixed(2);
       }
 
-      // -- Mode indicator --
-      const modeLabel = directSplit ? ' (Direct Split)' : ' (Tax-Adjusted Split)';
+      // Split label for display
+      const splitLabel = aPct + '/' + bPct;
 
       // -- Populate Summary Tiles --
       setText('outGross', fmt(gross));
@@ -350,6 +368,8 @@
       setText('outShareA', fmt(shareA));
       setText('outShareB', fmt(shareB));
       setText('outUnused', fmt(unused));
+      setText('tilePctA', aPct);
+      setText('tilePctB', bPct);
 
       // -- Transfer Card (highlighted) --
       setText('transferInvLabel', investment.toLocaleString('en-IN'));
@@ -373,16 +393,6 @@
       setText('outBTotal', fmt(bRetains));
       setText('outBNetGain', directSplit ? fmt(+(shareB - tax).toFixed(2)) : fmt(shareB));
 
-      // -- Toggle B card tax row visibility --
-      const bTaxRow = document.getElementById('outBTax').closest('.flex');
-      const bTaxNote = document.getElementById('bTaxNote');
-      if (directSplit) {
-        bTaxRow.classList.remove('hidden');
-        if (bTaxNote) bTaxNote.classList.remove('hidden');
-      } else {
-        if (bTaxNote) bTaxNote.classList.add('hidden');
-      }
-
       // -- Money Flow --
       const retainPct = +(100 - taxPct).toFixed(2);
       const flowEl = document.getElementById('moneyFlow');
@@ -394,11 +404,11 @@
           + arrow()
           + flowStep('IPO Sold with ' + profitPct + '% Profit', 'bg-amber-50 text-amber-800')
           + arrow()
-          + flowStep(fmt(gross) + ' Gross Profit — Split 50/50 Directly', 'bg-purple-50 text-purple-800 border border-purple-300')
+          + flowStep(fmt(gross) + ' Gross Profit — Split ' + splitLabel + ' Directly', 'bg-purple-50 text-purple-800 border border-purple-300')
           + arrow()
           + '<div class="flex gap-4">'
-          + flowStep('50% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
-          + flowStep('50% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
+          + flowStep(aPct + '% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
+          + flowStep(bPct + '% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
           + '</div>'
           + arrow()
           + flowStep('B pays ' + fmt(tax) + ' tax from own ' + fmt(shareB) + ' share → B net gain: ' + fmt(+(shareB - tax).toFixed(2)), 'bg-red-50 text-red-700')
@@ -420,8 +430,8 @@
           + flowStep(fmt(net) + ' Profit After Tax', 'bg-green-50 text-green-800')
           + arrow()
           + '<div class="flex gap-4">'
-          + flowStep('50% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
-          + flowStep('50% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
+          + flowStep(aPct + '% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
+          + flowStep(bPct + '% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
           + '</div>'
           + arrow()
           + flowStep('B Transfers ' + fmt(transferToA) + ' to A (' + fmt(investment) + ' + ' + fmt(shareA) + ')', 'bg-amber-100 text-amber-900 font-bold border border-amber-400')
@@ -435,14 +445,14 @@
       if (directSplit) {
         document.getElementById('formulaBlock').innerHTML =
           '<p>Gross Profit = ' + fmt(ipo) + ' × ' + profitPct + '% = <strong>' + fmt(gross) + '</strong></p>' +
-          '<p>A Profit Share = ' + fmt(gross) + ' ÷ 2 = <strong>' + fmt(shareA) + '</strong></p>' +
-          '<p>B Profit Share = ' + fmt(gross) + ' ÷ 2 = <strong>' + fmt(shareB) + '</strong></p>' +
+          '<p>A Profit Share = ' + fmt(gross) + ' × ' + aPct + '% = <strong>' + fmt(shareA) + '</strong></p>' +
+          '<p>B Profit Share = ' + fmt(gross) + ' × ' + bPct + '% = <strong>' + fmt(shareB) + '</strong></p>' +
           '<p class="text-red-600">B pays tax from own share: ' + fmt(shareB) + ' − ' + fmt(tax) + ' = <strong>' + fmt(+(shareB - tax).toFixed(2)) + '</strong> net</p>';
       } else {
         document.getElementById('formulaBlock').innerHTML =
           '<p>Net Profit = ' + fmt(ipo) + ' × ' + profitPct + '% × ' + retainPct + '% = <strong>' + fmt(net) + '</strong></p>' +
-          '<p>A Profit Share = ' + fmt(net) + ' ÷ 2 = <strong>' + fmt(shareA) + '</strong></p>' +
-          '<p>B Profit Share = ' + fmt(net) + ' ÷ 2 = <strong>' + fmt(shareB) + '</strong></p>';
+          '<p>A Profit Share = ' + fmt(net) + ' × ' + aPct + '% = <strong>' + fmt(shareA) + '</strong></p>' +
+          '<p>B Profit Share = ' + fmt(net) + ' × ' + bPct + '% = <strong>' + fmt(shareB) + '</strong></p>';
       }
 
       // -- Complete Summary --
@@ -454,8 +464,8 @@
         row('Gross Profit', fmt(gross)) +
         row('Tax (' + taxPct + '%)', fmt(tax)) +
         (directSplit ? '' : row('Net Profit (after tax)', fmt(net))) +
-        row('A Profit Share (50% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareA)) +
-        row('B Profit Share (50% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareB));
+        row('A Profit Share (' + aPct + '% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareA)) +
+        row('B Profit Share (' + bPct + '% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareB));
 
       if (directSplit) {
         summaryHTML += row('B Net Gain (after tax from share)', fmt(+(shareB - tax).toFixed(2)));
@@ -471,7 +481,7 @@
       document.getElementById('summaryGrid').innerHTML = summaryHTML;
 
       // store for copy
-      window._lastCalc = { investment, ipo, unused, profitPct, taxPct, gross, tax, net, shareA, shareB, transferToA, bRetains, directSplit };
+      window._lastCalc = { investment, ipo, unused, profitPct, taxPct, aPct, bPct, gross, tax, net, shareA, shareB, transferToA, bRetains, directSplit };
     }
 
     function flowStep(text, cls) {
@@ -490,6 +500,7 @@
       document.getElementById('ipoAmount').value = 14877;
       document.getElementById('profitPct').value = 22;
       document.getElementById('taxPct').value = 20;
+      document.getElementById('investorSharePct').value = 50;
       document.getElementById('directSplit').checked = false;
       calculate();
     }
@@ -513,9 +524,9 @@ Unused Amount:        ${fmt(c.unused)}
 Gross Profit:         ${fmt(c.gross)}
 Tax:                  ${fmt(c.tax)}
 
-Profit Split (50/50 on gross):
-  A's Share:          ${fmt(c.shareA)}
-  B's Share:          ${fmt(c.shareB)}
+Profit Split (${c.aPct}/${c.bPct} on gross):
+  A's Share (${c.aPct}%):  ${fmt(c.shareA)}
+  B's Share (${c.bPct}%):  ${fmt(c.shareB)}
 
 ━━━ TRANSFER ━━━
 B Must Transfer to A: ${fmt(c.transferToA)}
@@ -543,8 +554,8 @@ Gross Profit:         ${fmt(c.gross)}
 Tax:                  ${fmt(c.tax)}
 Net Profit:           ${fmt(c.net)}
 
-Profit Share — A:     ${fmt(c.shareA)}
-Profit Share — B:     ${fmt(c.shareB)}
+Profit Share — A (${c.aPct}%): ${fmt(c.shareA)}
+Profit Share — B (${c.bPct}%): ${fmt(c.shareB)}
 
 ━━━ TRANSFER ━━━
 B Must Transfer to A: ${fmt(c.transferToA)}
