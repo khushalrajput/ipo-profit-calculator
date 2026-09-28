@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPO Profit Settlement Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    .flow-arrow { writing-mode: vertical-lr; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0f7ff', 100: '#e0effe', 200: '#b9dffd', 400: '#4db0fb', 500: '#2196f3', 600: '#1976d2', 700: '#1565c0', 800: '#0d47a1' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 py-5">
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">IPO Profit Settlement Calculator</h1>
+      <p class="text-sm text-gray-500 mt-1">Calculate profit, tax and settlement between Investor and IPO Applicant.</p>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- Input Section -->
+    <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-5">IPO Details</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- Investment Amount -->
+        <div>
+          <label for="investmentAmount" class="block text-sm font-medium text-gray-700 mb-1">Investment Amount (₹)</label>
+          <input type="number" id="investmentAmount" value="15000" min="0" step="1"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+          <p class="text-xs text-gray-400 mt-1">Fixed amount given by User A to User B.</p>
+        </div>
+        <!-- Actual IPO Amount -->
+        <div>
+          <label for="ipoAmount" class="block text-sm font-medium text-gray-700 mb-1">Actual IPO Amount (₹)</label>
+          <input type="number" id="ipoAmount" value="14877" min="0" step="1"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+          <p class="text-xs text-gray-400 mt-1">Amount actually used for the IPO application.</p>
+          <p id="ipoError" class="text-xs text-red-500 mt-1 hidden">Cannot exceed the investment amount.</p>
+        </div>
+        <!-- Profit % -->
+        <div>
+          <label for="profitPct" class="block text-sm font-medium text-gray-700 mb-1">Profit (%)</label>
+          <input type="number" id="profitPct" value="22" min="0" step="0.01"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+          <p class="text-xs text-gray-400 mt-1">Profit earned on the actual IPO investment.</p>
+        </div>
+        <!-- Tax % -->
+        <div>
+          <label for="taxPct" class="block text-sm font-medium text-gray-700 mb-1">Tax (%)</label>
+          <input type="number" id="taxPct" value="20" min="0" max="100" step="0.01"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+          <p class="text-xs text-gray-400 mt-1">Tax deducted from gross profit (default 20%).</p>
+          <p id="taxError" class="text-xs text-red-500 mt-1 hidden">Must be between 0% and 100%.</p>
+        </div>
+      </div>
+      <!-- Direct Split Toggle -->
+      <div class="mt-5 p-3 bg-purple-50 rounded-lg border border-purple-200">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="directSplit" class="mt-0.5 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+          <div>
+            <span class="text-sm font-medium text-purple-900">Direct Profit Split (No Tax Adjustment)</span>
+            <p class="text-xs text-purple-600 mt-0.5">Split gross profit 50/50 directly. A gets investment + 50% gross profit. B gets 50% gross profit and pays tax from own share.</p>
+          </div>
+        </label>
+      </div>
+
+      <div class="flex gap-3 mt-4">
+        <button onclick="resetForm()" class="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition">Reset</button>
+        <button onclick="copySummary()" id="copyBtn" class="px-4 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition">Copy Summary</button>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="resultsSection" class="space-y-6">
+
+      <!-- Settlement Summary -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-5">Settlement Summary</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Gross Profit</p>
+            <p class="text-base font-semibold text-gray-900" id="outGross">--</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Tax</p>
+            <p class="text-base font-semibold text-red-600" id="outTax">--</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Profit After Tax</p>
+            <p class="text-base font-semibold text-gray-900" id="outNet">--</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Profit Share — A</p>
+            <p class="text-base font-semibold text-brand-700" id="outShareA">--</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Profit Share — B</p>
+            <p class="text-base font-semibold text-emerald-700" id="outShareB">--</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Unused Amount</p>
+            <p class="text-base font-semibold text-gray-900" id="outUnused">--</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- KEY ACTION: B transfers to A -->
+      <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-400 p-6 shadow-md">
+        <div class="flex items-start gap-3">
+          <span class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-400 text-white flex items-center justify-center text-lg font-bold">₹</span>
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-amber-900">B Must Transfer to A</h3>
+            <p class="text-xs text-amber-700 mt-0.5">A invested ₹<span id="transferInvLabel">15,000</span>. All money (principal + profit) is in B's account. B must return A's investment plus A's profit share.</p>
+            <p class="text-3xl sm:text-4xl font-extrabold text-amber-900 mt-3" id="outTransferToA">--</p>
+            <div class="mt-3 space-y-1 text-sm text-amber-800">
+              <div class="flex justify-between"><span>Original Investment (return)</span><span class="font-semibold" id="outTransferPrincipal">--</span></div>
+              <div class="flex justify-between"><span>A's Profit Share</span><span class="font-semibold" id="outTransferProfit">--</span></div>
+              <div class="flex justify-between border-t border-amber-300 pt-1 mt-1"><span class="font-bold">Total Transfer B → A</span><span class="font-bold" id="outTransferTotal">--</span></div>
+            </div>
+            <p class="text-xs text-amber-600 mt-3">After this transfer, B retains <span class="font-semibold" id="outBRetains">--</span> (B's profit share + tax liability).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- User A & User B Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- User A -->
+        <div class="bg-white rounded-xl shadow-sm border-2 border-brand-200 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">A</span>
+            <div>
+              <h3 class="font-semibold text-gray-900">User A — Investor</h3>
+              <p class="text-xs text-gray-500">Total Amount A Receives from B</p>
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-brand-700 mb-4" id="outSettleA">--</p>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-500">Original Investment (returned)</span><span class="font-medium" id="outAInvestment">--</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Profit Share</span><span class="font-medium" id="outAProfit">--</span></div>
+            <div class="flex justify-between border-t border-gray-200 pt-2"><span class="text-gray-700 font-semibold">Total A Receives</span><span class="font-bold text-brand-700" id="outATotal">--</span></div>
+            <p class="text-xs text-gray-400 mt-1">Net gain for A = <span id="outANetGain">--</span> (profit share only)</p>
+          </div>
+        </div>
+        <!-- User B -->
+        <div class="bg-white rounded-xl shadow-sm border-2 border-emerald-200 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold">B</span>
+            <div>
+              <h3 class="font-semibold text-gray-900">User B — IPO Applicant</h3>
+              <p class="text-xs text-gray-500">Amount B Retains After Transfer</p>
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-emerald-700 mb-4" id="outSettleB">--</p>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-500">Profit Share</span><span class="font-medium" id="outBProfit">--</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Tax (B's responsibility)</span><span class="font-medium" id="outBTax">--</span></div>
+            <div class="flex justify-between border-t border-gray-200 pt-2"><span class="text-gray-700 font-semibold">Total B Retains</span><span class="font-bold text-emerald-700" id="outBTotal">--</span></div>
+            <p class="text-xs text-gray-400 mt-1">Net gain for B = <span id="outBNetGain">--</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Money Flow -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-5">How the Money Flows</h2>
+        <div class="flex flex-col items-center text-sm space-y-2" id="moneyFlow">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- Direct Formula -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick Formula</h2>
+        <p class="text-sm text-gray-600 mb-2">Since tax is <span id="formulaTaxLabel">20</span>%, net profit retains <span id="formulaRetainLabel">80</span>% of gross profit:</p>
+        <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1" id="formulaBlock">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- Additional Summary -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Complete Summary</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm" id="summaryGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Example Section (permanent) -->
+    <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">Example Calculation</h2>
+      <p class="text-sm text-gray-500 mb-4">Investment: ₹15,000 &nbsp;|&nbsp; Actual IPO: ₹14,877 &nbsp;|&nbsp; Profit: 22% &nbsp;|&nbsp; Tax: 20%</p>
+      <div class="space-y-3 text-sm">
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">1. Unused Amount</p>
+          <p class="text-gray-600 mt-1">₹15,000 − ₹14,877 = <strong>₹123.00</strong></p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">2. Gross Profit</p>
+          <p class="text-gray-600 mt-1">₹14,877 × 22% = <strong>₹3,272.94</strong></p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">3. Tax</p>
+          <p class="text-gray-600 mt-1">₹3,272.94 × 20% = <strong>₹654.59</strong></p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">4. Profit After Tax</p>
+          <p class="text-gray-600 mt-1">₹3,272.94 − ₹654.59 = <strong>₹2,618.35</strong></p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">5. Profit Split (50/50)</p>
+          <p class="text-gray-600 mt-1">₹2,618.35 ÷ 2 = <strong>₹1,309.18</strong> each</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">6. User A — Investor</p>
+          <p class="text-gray-600 mt-1">₹1,309.18 (profit) + ₹123.00 (unused) = <strong>₹1,432.18</strong> settlement component</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="font-medium text-gray-700">7. User B — IPO Applicant</p>
+          <p class="text-gray-600 mt-1">₹14,877.00 (IPO principal) + ₹1,309.18 (profit) + ₹654.59 (tax) = <strong>₹16,840.77</strong> total IPO proceeds in B's account</p>
+          <p class="text-xs text-gray-400 mt-1">The ₹14,877 IPO principal belongs to the original investment and is returned through B's IPO proceeds — it is not profit.</p>
+        </div>
+        <div class="bg-amber-50 rounded-lg p-4 border-2 border-amber-300">
+          <p class="font-bold text-amber-900 text-base">8. B Must Transfer to A</p>
+          <p class="text-amber-800 mt-2">Since A invested ₹15,000 and all money is in B's account:</p>
+          <p class="text-amber-800 mt-1">₹15,000.00 (return investment) + ₹1,309.18 (A's profit share) = <strong class="text-lg">₹16,309.18</strong></p>
+          <p class="text-amber-700 mt-2 text-sm">After transferring ₹16,309.18 to A, B retains:</p>
+          <p class="text-amber-800">₹1,309.18 (B's profit) + ₹654.59 (tax) = <strong>₹1,963.77</strong></p>
+          <p class="text-xs text-amber-600 mt-2">Verification: ₹16,309.18 + ₹1,963.77 = ₹18,272.95 ≈ ₹15,000 + ₹3,272.94 = ₹18,272.94 (1-paisa rounding)</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-200 mt-8">
+    <div class="max-w-5xl mx-auto px-4 py-4 text-center text-xs text-gray-400">
+      IPO Profit Settlement Calculator &middot; For personal use only &middot; Not financial advice
+    </div>
+  </footer>
+
+  <script>
+    // ---- Helpers ----
+    function fmt(n) {
+      return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function getVal(id) {
+      const v = parseFloat(document.getElementById(id).value);
+      return isNaN(v) ? 0 : v;
+    }
+
+    function setText(id, text) {
+      document.getElementById(id).textContent = text;
+    }
+
+    // ---- Calculation ----
+    function calculate() {
+      const investment = getVal('investmentAmount');
+      const ipo = getVal('ipoAmount');
+      const profitPct = getVal('profitPct');
+      const taxPct = getVal('taxPct');
+
+      // Validation
+      const ipoErr = document.getElementById('ipoError');
+      const taxErr = document.getElementById('taxError');
+      let hasError = false;
+
+      if (ipo > investment) {
+        ipoErr.classList.remove('hidden');
+        hasError = true;
+      } else {
+        ipoErr.classList.add('hidden');
+      }
+
+      if (taxPct < 0 || taxPct > 100) {
+        taxErr.classList.remove('hidden');
+        hasError = true;
+      } else {
+        taxErr.classList.add('hidden');
+      }
+
+      if (investment < 0 || ipo < 0 || profitPct < 0) hasError = true;
+
+      if (hasError) {
+        document.getElementById('resultsSection').classList.add('opacity-40', 'pointer-events-none');
+        return;
+      }
+      document.getElementById('resultsSection').classList.remove('opacity-40', 'pointer-events-none');
+
+      const directSplit = document.getElementById('directSplit').checked;
+
+      // Step 1 — Unused
+      const unused = +(investment - ipo).toFixed(2);
+
+      // Step 2 — Gross Profit
+      const gross = +(ipo * profitPct / 100).toFixed(2);
+
+      // Step 3 — Tax
+      const tax = +(gross * taxPct / 100).toFixed(2);
+
+      // Step 4 & 5 — Split depends on mode
+      let net, shareA, shareB, transferToA, bRetains;
+
+      if (directSplit) {
+        // Direct split: 50/50 on GROSS profit, no tax adjustment
+        // B pays tax from own share
+        const halfGross = +(Math.floor(gross * 100 / 2) / 100).toFixed(2);
+        const otherHalf = +(gross - halfGross).toFixed(2);
+        shareA = halfGross;                                  // A gets 50% gross
+        shareB = otherHalf;                                  // B gets 50% gross
+        net = gross;                                         // no tax deduction in split
+        transferToA = +(investment + shareA).toFixed(2);     // return principal + A's share
+        bRetains = +(shareB).toFixed(2);                     // B keeps own share (pays tax from it)
+      } else {
+        // Standard: deduct tax first, then split net profit
+        net = +(gross - tax).toFixed(2);
+        shareA = +(Math.floor(net * 100 / 2) / 100).toFixed(2);
+        shareB = +(net - shareA).toFixed(2);
+        transferToA = +(investment + shareA).toFixed(2);
+        bRetains = +(shareB + tax).toFixed(2);
+      }
+
+      // -- Mode indicator --
+      const modeLabel = directSplit ? ' (Direct Split)' : ' (Tax-Adjusted Split)';
+
+      // -- Populate Summary Tiles --
+      setText('outGross', fmt(gross));
+      setText('outTax', fmt(tax));
+      setText('outNet', directSplit ? fmt(gross) + ' (gross)' : fmt(net));
+      setText('outShareA', fmt(shareA));
+      setText('outShareB', fmt(shareB));
+      setText('outUnused', fmt(unused));
+
+      // -- Transfer Card (highlighted) --
+      setText('transferInvLabel', investment.toLocaleString('en-IN'));
+      setText('outTransferToA', fmt(transferToA));
+      setText('outTransferPrincipal', fmt(investment));
+      setText('outTransferProfit', fmt(shareA));
+      setText('outTransferTotal', fmt(transferToA));
+      setText('outBRetains', fmt(bRetains));
+
+      // -- User A Card --
+      setText('outSettleA', fmt(transferToA));
+      setText('outAInvestment', fmt(investment));
+      setText('outAProfit', fmt(shareA));
+      setText('outATotal', fmt(transferToA));
+      setText('outANetGain', fmt(shareA));
+
+      // -- User B Card --
+      setText('outSettleB', fmt(bRetains));
+      setText('outBProfit', fmt(shareB));
+      setText('outBTax', directSplit ? fmt(tax) + ' (from own share)' : fmt(tax));
+      setText('outBTotal', fmt(bRetains));
+      setText('outBNetGain', directSplit ? fmt(+(shareB - tax).toFixed(2)) : fmt(shareB));
+
+      // -- Toggle B card tax row visibility --
+      const bTaxRow = document.getElementById('outBTax').closest('.flex');
+      const bTaxNote = document.getElementById('bTaxNote');
+      if (directSplit) {
+        bTaxRow.classList.remove('hidden');
+        if (bTaxNote) bTaxNote.classList.remove('hidden');
+      } else {
+        if (bTaxNote) bTaxNote.classList.add('hidden');
+      }
+
+      // -- Money Flow --
+      const retainPct = +(100 - taxPct).toFixed(2);
+      const flowEl = document.getElementById('moneyFlow');
+
+      if (directSplit) {
+        flowEl.innerHTML = flowStep(fmt(investment) + ' Given by A', 'bg-brand-50 text-brand-800')
+          + arrow()
+          + flowStep(fmt(ipo) + ' Used for IPO  +  ' + fmt(unused) + ' Unused', 'bg-gray-100 text-gray-700')
+          + arrow()
+          + flowStep('IPO Sold with ' + profitPct + '% Profit', 'bg-amber-50 text-amber-800')
+          + arrow()
+          + flowStep(fmt(gross) + ' Gross Profit — Split 50/50 Directly', 'bg-purple-50 text-purple-800 border border-purple-300')
+          + arrow()
+          + '<div class="flex gap-4">'
+          + flowStep('50% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
+          + flowStep('50% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
+          + '</div>'
+          + arrow()
+          + flowStep('B pays ' + fmt(tax) + ' tax from own ' + fmt(shareB) + ' share → B net gain: ' + fmt(+(shareB - tax).toFixed(2)), 'bg-red-50 text-red-700')
+          + arrow()
+          + flowStep('B Transfers ' + fmt(transferToA) + ' to A (' + fmt(investment) + ' + ' + fmt(shareA) + ')', 'bg-amber-100 text-amber-900 font-bold border border-amber-400')
+          + arrow()
+          + flowStep('B Retains ' + fmt(bRetains) + ' (pays ' + fmt(tax) + ' tax from this)', 'bg-emerald-50 text-emerald-800');
+      } else {
+        flowEl.innerHTML = flowStep(fmt(investment) + ' Given by A', 'bg-brand-50 text-brand-800')
+          + arrow()
+          + flowStep(fmt(ipo) + ' Used for IPO  +  ' + fmt(unused) + ' Unused → A', 'bg-gray-100 text-gray-700')
+          + arrow()
+          + flowStep('IPO Sold with ' + profitPct + '% Profit', 'bg-amber-50 text-amber-800')
+          + arrow()
+          + flowStep(fmt(ipo) + ' Principal  +  ' + fmt(gross) + ' Gross Profit', 'bg-gray-100 text-gray-700')
+          + arrow()
+          + flowStep(fmt(tax) + ' Tax → B (account holder)', 'bg-red-50 text-red-700')
+          + arrow()
+          + flowStep(fmt(net) + ' Profit After Tax', 'bg-green-50 text-green-800')
+          + arrow()
+          + '<div class="flex gap-4">'
+          + flowStep('50% → A: ' + fmt(shareA), 'bg-brand-50 text-brand-800')
+          + flowStep('50% → B: ' + fmt(shareB), 'bg-emerald-50 text-emerald-800')
+          + '</div>'
+          + arrow()
+          + flowStep('B Transfers ' + fmt(transferToA) + ' to A (' + fmt(investment) + ' + ' + fmt(shareA) + ')', 'bg-amber-100 text-amber-900 font-bold border border-amber-400')
+          + arrow()
+          + flowStep('B Retains ' + fmt(bRetains) + ' (' + fmt(shareB) + ' profit + ' + fmt(tax) + ' tax)', 'bg-emerald-50 text-emerald-800');
+      }
+
+      // -- Quick Formula --
+      setText('formulaTaxLabel', taxPct);
+      setText('formulaRetainLabel', retainPct);
+      if (directSplit) {
+        document.getElementById('formulaBlock').innerHTML =
+          '<p>Gross Profit = ' + fmt(ipo) + ' × ' + profitPct + '% = <strong>' + fmt(gross) + '</strong></p>' +
+          '<p>A Profit Share = ' + fmt(gross) + ' ÷ 2 = <strong>' + fmt(shareA) + '</strong></p>' +
+          '<p>B Profit Share = ' + fmt(gross) + ' ÷ 2 = <strong>' + fmt(shareB) + '</strong></p>' +
+          '<p class="text-red-600">B pays tax from own share: ' + fmt(shareB) + ' − ' + fmt(tax) + ' = <strong>' + fmt(+(shareB - tax).toFixed(2)) + '</strong> net</p>';
+      } else {
+        document.getElementById('formulaBlock').innerHTML =
+          '<p>Net Profit = ' + fmt(ipo) + ' × ' + profitPct + '% × ' + retainPct + '% = <strong>' + fmt(net) + '</strong></p>' +
+          '<p>A Profit Share = ' + fmt(net) + ' ÷ 2 = <strong>' + fmt(shareA) + '</strong></p>' +
+          '<p>B Profit Share = ' + fmt(net) + ' ÷ 2 = <strong>' + fmt(shareB) + '</strong></p>';
+      }
+
+      // -- Complete Summary --
+      const totalInPool = +(investment + gross).toFixed(2);
+      let summaryHTML =
+        row('Original Investment', fmt(investment)) +
+        row('Actual IPO Investment', fmt(ipo)) +
+        row('Unused Amount', fmt(unused)) +
+        row('Gross Profit', fmt(gross)) +
+        row('Tax (' + taxPct + '%)', fmt(tax)) +
+        (directSplit ? '' : row('Net Profit (after tax)', fmt(net))) +
+        row('A Profit Share (50% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareA)) +
+        row('B Profit Share (50% ' + (directSplit ? 'gross' : 'net') + ')', fmt(shareB));
+
+      if (directSplit) {
+        summaryHTML += row('B Net Gain (after tax from share)', fmt(+(shareB - tax).toFixed(2)));
+      }
+
+      summaryHTML +=
+        '<div class="sm:col-span-2 border-t border-gray-200 mt-2 pt-3 space-y-2">' +
+        '<div class="flex justify-between bg-amber-50 rounded-lg px-3 py-2"><span class="font-bold text-amber-900">B Transfers to A</span><span class="font-extrabold text-amber-900">' + fmt(transferToA) + '</span></div>' +
+        '<div class="flex justify-between"><span class="font-semibold text-emerald-700">B Retains</span><span class="font-bold text-emerald-700">' + fmt(bRetains) + '</span></div>' +
+        (directSplit ? '<div class="text-xs text-purple-600 mt-1">Direct Split mode — B pays ' + fmt(tax) + ' tax from own share</div>' : '') +
+        '</div>';
+
+      document.getElementById('summaryGrid').innerHTML = summaryHTML;
+
+      // store for copy
+      window._lastCalc = { investment, ipo, unused, profitPct, taxPct, gross, tax, net, shareA, shareB, transferToA, bRetains, directSplit };
+    }
+
+    function flowStep(text, cls) {
+      return '<div class="rounded-lg px-4 py-2 text-sm font-medium ' + cls + '">' + text + '</div>';
+    }
+    function arrow() {
+      return '<div class="text-gray-400 text-lg leading-none">↓</div>';
+    }
+    function row(label, value) {
+      return '<div class="flex justify-between py-1"><span class="text-gray-500">' + label + '</span><span class="font-medium">' + value + '</span></div>';
+    }
+
+    // ---- Reset ----
+    function resetForm() {
+      document.getElementById('investmentAmount').value = 15000;
+      document.getElementById('ipoAmount').value = 14877;
+      document.getElementById('profitPct').value = 22;
+      document.getElementById('taxPct').value = 20;
+      document.getElementById('directSplit').checked = false;
+      calculate();
+    }
+
+    // ---- Copy Summary ----
+    function copySummary() {
+      const c = window._lastCalc;
+      if (!c) return;
+      let text;
+      if (c.directSplit) {
+        const bNetGain = +(c.shareB - c.tax).toFixed(2);
+        text =
+`IPO Profit Settlement Summary (DIRECT SPLIT)
+==============================================
+Investment Amount:    ${fmt(c.investment)}
+Actual IPO Amount:    ${fmt(c.ipo)}
+Profit %:             ${c.profitPct}%
+Tax %:                ${c.taxPct}%
+
+Unused Amount:        ${fmt(c.unused)}
+Gross Profit:         ${fmt(c.gross)}
+Tax:                  ${fmt(c.tax)}
+
+Profit Split (50/50 on gross):
+  A's Share:          ${fmt(c.shareA)}
+  B's Share:          ${fmt(c.shareB)}
+
+━━━ TRANSFER ━━━
+B Must Transfer to A: ${fmt(c.transferToA)}
+  Original Investment: ${fmt(c.investment)}
+  A's Profit Share:    ${fmt(c.shareA)}
+
+B Retains:            ${fmt(c.bRetains)}
+  B's Profit Share:    ${fmt(c.shareB)}
+  B pays tax from own share: ${fmt(c.tax)}
+  B's Net Gain:        ${fmt(bNetGain)}
+
+A's Net Gain:         ${fmt(c.shareA)}
+`;
+      } else {
+        text =
+`IPO Profit Settlement Summary (TAX-ADJUSTED SPLIT)
+====================================================
+Investment Amount:    ${fmt(c.investment)}
+Actual IPO Amount:    ${fmt(c.ipo)}
+Profit %:             ${c.profitPct}%
+Tax %:                ${c.taxPct}%
+
+Unused Amount:        ${fmt(c.unused)}
+Gross Profit:         ${fmt(c.gross)}
+Tax:                  ${fmt(c.tax)}
+Net Profit:           ${fmt(c.net)}
+
+Profit Share — A:     ${fmt(c.shareA)}
+Profit Share — B:     ${fmt(c.shareB)}
+
+━━━ TRANSFER ━━━
+B Must Transfer to A: ${fmt(c.transferToA)}
+  Original Investment: ${fmt(c.investment)}
+  A's Profit Share:    ${fmt(c.shareA)}
+
+B Retains:            ${fmt(c.bRetains)}
+  B's Profit Share:    ${fmt(c.shareB)}
+  Tax (B's liability): ${fmt(c.tax)}
+
+A's Net Gain:         ${fmt(c.shareA)}
+B's Net Gain:         ${fmt(c.shareB)}
+`;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy Summary'; }, 1500);
+      });
+    }
+
+    // ---- Auto-calculate on input ----
+    document.querySelectorAll('input[type="number"]').forEach(el => {
+      el.addEventListener('input', calculate);
+    });
+    document.getElementById('directSplit').addEventListener('change', calculate);
+
+    // Initial calculation
+    calculate();
+  </script>
+</body>
+</html>
